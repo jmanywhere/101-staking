@@ -24,8 +24,10 @@ contract BaseStaking is IBaseStaking, Ownable {
     uint256 public totalRewardsToGive;
     uint256 public lastAction;
     uint256 public accumulatedRewardsPerToken;
+    uint256 public prevTokens;
 
     IWETH public weth;
+    uint256 constant MAGNIFIER = 1e12;
 
     constructor(address _weth) {
         lastAction = block.timestamp;
@@ -44,8 +46,8 @@ contract BaseStaking is IBaseStaking, Ownable {
         userDeposits[msg.sender].debt =
             accumulatedRewardsPerToken *
             block.timestamp;
-
         console.log("Data ", msg.value, block.timestamp);
+        prevTokens += msg.value;
     }
 
     function withdraw() external {
@@ -53,19 +55,37 @@ contract BaseStaking is IBaseStaking, Ownable {
     }
 
     function claimRewards(bool isWETH) external {
-        revert("Not implemented");
+        if (!isWETH) revert("Not implemented");
+        redistributeRewards();
+        User storage user = userDeposits[msg.sender];
+        uint256 userReward = (user.deposit * accumulatedRewardsPerToken) /
+            MAGNIFIER;
+        user.debt = userReward;
+        userReward -= user.debt;
+        user.lastClaim = block.timestamp;
+        weth.transfer(msg.sender, userReward);
+        emit ClaimedRewards(msg.sender, userReward);
     }
 
     function addETHRewards() external payable {
         revert("Not implemented");
     }
 
-    function addWETHRewards() external {
+    function addWETHRewards() external payable {
         revert("Not implemented");
     }
 
-    function getPendingRewards(address _user) external view returns (uint256) {
-        revert("Not implemented");
+    function getPendingRewards(address _user) public view returns (uint256) {
+        User storage user = userDeposits[_user];
+        uint diff = block.timestamp - lastAction;
+        if (diff == 0) return 0;
+        uint256 reward = diff * emissionsPerSecond();
+        reward /= address(this).balance;
+        reward =
+            ((accumulatedRewardsPerToken + reward) * user.deposit) /
+            MAGNIFIER;
+        reward -= user.debt;
+        return reward;
     }
 
     function getUserAPY(address _user) external view returns (uint256) {
@@ -85,12 +105,17 @@ contract BaseStaking is IBaseStaking, Ownable {
     function redistributeRewards() internal {
         uint currentRewardsPerToken = accumulatedRewardsPerToken;
 
-        if (block.timestamp - lastAction == 0) return;
-
         uint256 timePassed = block.timestamp - lastAction;
-        uint rewardsPerSecond = (totalRewardsToGive * 1e12) / 100 / 1 days;
+        if (timePassed == 0) return;
+
+        uint rewardsPerSecond = emissionsPerSecond();
         uint256 reward = timePassed * rewardsPerSecond;
-        reward = reward / address(this).balance;
+        reward = reward / prevTokens;
         accumulatedRewardsPerToken = currentRewardsPerToken + reward;
+        lastAction = block.timestamp;
+    }
+
+    function emissionsPerSecond() public pure returns (uint) {
+        return uint256(1 ether * MAGNIFIER) / 100 / 1 days;
     }
 }

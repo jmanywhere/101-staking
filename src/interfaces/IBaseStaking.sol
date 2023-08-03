@@ -50,4 +50,5 @@ interface IBaseStaking {
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount, bool isWETH);
     event AddedRewards(uint256 amount, bool isWETH);
+    event ClaimedRewards(address indexed user, uint256 amount);
 }

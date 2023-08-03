@@ -50,5 +50,46 @@ contract BaseStakingTest is Test {
         assertEq(debt, 0);
     }
 
+    function test_user_pendingRewards() public {
+        vm.prank(user1);
+        staking.deposit{value: 1 ether}();
+
+        skip(1 days);
+        uint pendingRewards = staking.getPendingRewards(user1);
+        uint expectedRewards = 0.01 ether;
+        if (pendingRewards >= expectedRewards) {
+            assertLt(pendingRewards - expectedRewards, 10);
+        } else {
+            assertLt(expectedRewards - pendingRewards, 10);
+        }
+    }
+
+    function test_claim_single_user() public {
+        vm.prank(user1);
+        staking.deposit{value: 1 ether}();
+
+        skip(1 days);
+        uint pendingRewards = staking.getPendingRewards(user1);
+        uint expectedRewards = 0.01 ether;
+        if (pendingRewards >= expectedRewards) {
+            assertLt(pendingRewards - expectedRewards, 10);
+        } else {
+            assertLt(expectedRewards - pendingRewards, 10);
+        }
+
+        uint prevWETHbalance = weth.balanceOf(user1);
+
+        vm.prank(user1);
+        staking.claimRewards(true);
+
+        assertEq(weth.balanceOf(user1), prevWETHbalance + expectedRewards);
+        // (uint deposits, uint depositTime, uint unblockTime, uint debt) = staking
+        //     .userDeposits(user1);
+        // assertEq(deposits, 1 ether);
+        // assertEq(depositTime, block.timestamp);
+        // assertEq(unblockTime, block.timestamp + 180 days);
+        // assertEq(debt, 0);
+    }
+
     function test_double_deposit() public {}
 }
